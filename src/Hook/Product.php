@@ -26,6 +26,9 @@
 
 namespace PrestaShop\Module\FacetedSearch\Hook;
 
+use Module;
+use Tools;
+
 class Product extends AbstractHook
 {
     const AVAILABLE_HOOKS = [
@@ -40,6 +43,13 @@ class Product extends AbstractHook
     public function actionProductSave(array $params)
     {
         if (empty($params['id_product'])) {
+            return;
+        }
+
+        // In batch mode, avoid indexation
+        // It could be time consuming in case of multiple saved products...
+        if (Module::getBatchMode()) {
+            $this->module->keepProductIdForLater((int) $params['id_product']);
             return;
         }
 

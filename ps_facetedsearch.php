@@ -74,6 +74,13 @@ class Ps_Facetedsearch extends Module implements WidgetInterface
     const DECIMAL_DIGITS = 5;
 
     /**
+     * The name of the file which contains updated products during a batch
+     *
+     * @var string
+     */
+    const BATCH_PRODUCTS_FILENAME = "products.batch.csv";
+
+    /**
      * @var bool
      */
     private $ajax;
@@ -1503,5 +1510,53 @@ VALUES(' . $last_id . ', ' . (int) $idShop . ')');
     public function getWidgetVariables($hookName, array $configuration)
     {
         return [];
+    }
+
+    /**
+     * When the batch mode is active, keep the id in a file
+     * These file will be read at the end of the batch te run the products indexation
+     * @param int $productId Id of the product to keep in the file
+     * @return bool Everything is fine
+     */
+    public function keepProductIdForLater($productId)
+    {
+        if (!(int) $productId) {
+            return false;
+        }
+        $batchProductFile = fopen(__DIR__ . '/' . self::BATCH_PRODUCTS_FILENAME, 'a');
+        if ($batchProductFile === false) {
+            return false;
+        }
+        fwrite($batchProductFile, $productId . PHP_EOL);
+        fclose($batchProductFile);
+        return true;
+    }
+
+    /**
+     * Read the file containing products id saved during a batch and index them
+     * This function has to be called when the batch is done, this module do not knw when...
+     * @return bool False if there is no file nor id
+     */
+    public function indexForBatch()
+    {
+        @set_time_limit(0);
+        $path = __DIR__ . '/' . self::BATCH_PRODUCTS_FILENAME;
+        // No file, nothing to do !
+        if (!Tools::file_exists_no_cache($path)) {
+            return false;
+        }
+        // Get the ids and delete the file
+        $productIds = explode(PHP_EOL, file_get_contents($path));
+        Tools::deleteFile($path);
+        if (empty($productIds)) {
+            return false;
+        }
+        // Reindex products prices and attributes
+        foreach ($productIds as $productId) {
+            $this->indexProductPrices((int) $productId);
+            $this->indexAttributes((int) $productId);
+        }
+        $this->invalidateLayeredFilterBlockCache();
+        return true;
     }
 }
